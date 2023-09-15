@@ -24,7 +24,14 @@
 #include <libb64/cencode.h>
 
 #ifndef ESP8266
+
+// Use alternate sha1 implementation if provided (e.g., on Wokwi)
+#if __has_include(<sha/sha1.h>)
+#include <sha/sha1.h>
+#else
 #include "mbedtls/sha1.h"
+#endif
+
 #else
 #include <Hash.h>
 #endif
@@ -1256,13 +1263,21 @@ AsyncWebSocketResponse::AsyncWebSocketResponse(const String& key, AsyncWebSocket
 #ifdef ESP8266
   sha1(key + WS_STR_UUID, hash);
 #else
-  (String&)key += WS_STR_UUID;
+#if __has_include(<sha/sha1.h>)
+  Sha1.init();
+  Sha1.print(key + WS_STR_UUID);
+  uint8_t *result = Sha1.result();
+  memcpy(hash, result, 20);
+#else
+  (String &)key += WS_STR_UUID;
   mbedtls_sha1_context ctx;
   mbedtls_sha1_init(&ctx);
   mbedtls_sha1_starts_ret(&ctx);
-  mbedtls_sha1_update_ret(&ctx, (const unsigned char*)key.c_str(), key.length());
+  mbedtls_sha1_update_ret(&ctx, (const unsigned char *)key.c_str(),
+                          key.length());
   mbedtls_sha1_finish_ret(&ctx, hash);
   mbedtls_sha1_free(&ctx);
+#endif
 #endif
   base64_encodestate _state;
   base64_init_encodestate(&_state);
